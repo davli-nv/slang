@@ -756,6 +756,17 @@ GLSLSystemValueInfo* getGLSLSystemValueInfo(
         requiredType = builder->getBasicType(BaseType::Int);
         name = "gl_SampleID";
     }
+    else if (semanticName == "sv_sampleposition")
+    {
+        requiredType = builder->getVectorType(
+            builder->getBasicType(BaseType::Float),
+            builder->getIntValue(builder->getIntType(), 2));
+        name = "gl_SamplePosition";
+        printf("davli: getGLSLSystemValueInfo sv_sampleposition\n");
+        targetVarName = IRTargetBuiltinVarName::HlslSamplePosition;
+        // context->requireSPIRVVersion(SemanticVersion(1, 3));
+        // context->requireGLSLVersion(ProfileVersion::GLSL_400);
+    }
     else if (semanticName == "sv_stencilref")
     {
         // uint in hlsl, int in glsl
@@ -1305,8 +1316,10 @@ void invokePathConstantFuncInHullShader(
 
 static bool targetBuiltinRequiresLegalization(IRTargetBuiltinVarName builtinVarName)
 {
+    printf("davli: targetBuiltinRequiresLegalization %#x\n", (int)builtinVarName);
     return (builtinVarName == IRTargetBuiltinVarName::HlslInstanceID) ||
-           (builtinVarName == IRTargetBuiltinVarName::HlslVertexID);
+           (builtinVarName == IRTargetBuiltinVarName::HlslVertexID) ||
+           (builtinVarName == IRTargetBuiltinVarName::HlslSamplePosition);
 }
 
 ScalarizedVal createSimpleGLSLGlobalVarying(
@@ -1368,7 +1381,14 @@ ScalarizedVal createSimpleGLSLGlobalVarying(
             newVarLayout->sourceLoc = inVarLayout->sourceLoc;
 
             inVarLayout->replaceUsesWith(newVarLayout);
-            systemValueInfo->targetVarName = IRTargetBuiltinVarName::Unknown;
+            printf("davli: %s:%d convert: %#x\n", __FILE__, __LINE__, systemValueInfo->targetVarName);
+            if (systemValueInfo->targetVarName == IRTargetBuiltinVarName::HlslSamplePosition)
+            {
+            }
+            else
+            {
+                systemValueInfo->targetVarName = IRTargetBuiltinVarName::Unknown;
+            }
         }
     }
 
@@ -4008,9 +4028,11 @@ void legalizeTargetBuiltinVar(GLSLLegalizationContext& context)
     List<KeyValuePair<IRTargetBuiltinVarName, IRInst*>> workItems;
     for (auto [builtinVarName, varInst] : context.builtinVarMap)
     {
+        printf("davli: legalizeTargetBuiltinVar builtinVarName=%#x\n", (int)builtinVarName);
         if (targetBuiltinRequiresLegalization(builtinVarName))
         {
             workItems.add(KeyValuePair(builtinVarName, varInst));
+            printf("davli: workItems.add %#x\n", builtinVarName);
         }
     }
 
@@ -4029,7 +4051,7 @@ void legalizeTargetBuiltinVar(GLSLLegalizationContext& context)
         auto builtinVarName = kv.key;
         auto varInst = kv.value;
 
-        // Repalce SV_InstanceID with gl_InstanceIndex - gl_BaseInstance.
+        // Replace SV_InstanceID with gl_InstanceIndex - gl_BaseInstance.
         if (builtinVarName == IRTargetBuiltinVarName::HlslInstanceID)
         {
             auto instanceIndex = getOrCreateBuiltinVar(
@@ -4062,7 +4084,7 @@ void legalizeTargetBuiltinVar(GLSLLegalizationContext& context)
                 varInst,
                 IRTargetBuiltinVarName::SpvInstanceIndex);
         }
-        // Repalce SV_VertexID with gl_VertexIndex - gl_BaseVertex.
+        // Replace SV_VertexID with gl_VertexIndex - gl_BaseVertex.
         else if (builtinVarName == IRTargetBuiltinVarName::HlslVertexID)
         {
             auto vertexIndex = getOrCreateBuiltinVar(
@@ -4092,6 +4114,33 @@ void legalizeTargetBuiltinVar(GLSLLegalizationContext& context)
             // decoration to ensure SPIR-V emitter sees the correct builtin
             IRBuilder builder(varInst);
             builder.addTargetBuiltinVarDecoration(varInst, IRTargetBuiltinVarName::SpvVertexIndex);
+        }
+        // Replace SV_SamplePosition with gl_SamplePosition - (0.5, 0.5)
+        else if (builtinVarName == IRTargetBuiltinVarName::HlslSamplePosition)
+        {
+            fprintf(stderr, "davli: legalizeTargetBuiltinVar: HlslSamplePosition\n");
+            auto samplePositionType = varInst->getDataType();
+            auto samplePosition = getOrCreateBuiltinVar(
+                IRTargetBuiltinVarName::SpvSamplePosition,
+                varInst->getDataType());
+            traverseUses(
+                varInst,
+                [&](IRUse* use)
+                {
+                    auto user = use->getUser();
+                    if (user->getOp() == kIROp_Load)
+                    {
+                        IRBuilder builder(use->getUser());
+                        builder.setInsertBefore(use->getUser());
+                        auto offset = builder.emitMakeVectorFromScalar(
+                            builder.getVectorType(builder.getFloatType(), 2),
+                            builder.getFloatValue(builder.getFloatType(), 0.5));
+                        auto sub = builder.emitSub(
+                            tryGetPointedToType(&builder, varInst->getDataType()),
+                            builder.emitLoad(samplePosition), offset);
+                        user->replaceUsesWith(sub);
+                    }
+                });
         }
     }
 }

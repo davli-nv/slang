@@ -194,6 +194,8 @@ enum class IRTargetBuiltinVarName
     SpvBaseInstance,
     SpvVertexIndex,
     SpvBaseVertex,
+    HlslSamplePosition,
+    SpvSamplePosition,
 };
 
 FIDDLE()

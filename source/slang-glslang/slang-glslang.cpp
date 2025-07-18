@@ -225,6 +225,11 @@ extern "C"
             memcpy(*outString, text->str, text->length);
             (*outString)[text->length] = '\0'; // Ensure null termination
         }
+        else
+        {
+            fwrite(text->str, text->length, 1, stderr);
+            fputs("\n", stderr); 
+        }
 
         spvTextDestroy(text);
         return true;

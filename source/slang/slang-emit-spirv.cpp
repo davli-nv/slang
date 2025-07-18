@@ -6005,6 +6005,13 @@ struct SPIRVEmitContext : public SourceEmitterBase, public SPIRVEmitSharedContex
             case IRTargetBuiltinVarName::SpvBaseVertex:
                 requireSPIRVCapability(SpvCapabilityDrawParameters);
                 return getBuiltinGlobalVar(inst->getFullType(), SpvBuiltInBaseVertex, inst);
+            case IRTargetBuiltinVarName::HlslSamplePosition:
+                fprintf(stderr, "davli: maybeEmitSystemVal builtinVarDecor=HlslSamplePosition\n");
+                break;
+            case IRTargetBuiltinVarName::SpvSamplePosition:
+                fprintf(stderr, "davli: maybeEmitSystemVal builtinVarDecor=SpvSamplePosition\n");
+                requireSPIRVCapability(SpvCapabilitySampleRateShading);
+                return getBuiltinGlobalVar(inst->getFullType(), SpvBuiltInSamplePosition, inst);
             }
         }
         if (auto layout = getVarLayout(inst))
@@ -6181,6 +6188,12 @@ struct SPIRVEmitContext : public SourceEmitterBase, public SPIRVEmitSharedContex
                 {
                     requireSPIRVCapability(SpvCapabilitySampleRateShading);
                     return getBuiltinGlobalVar(inst->getFullType(), SpvBuiltInSampleId, inst);
+                }
+                else if (semanticName == "sv_sampleposition")
+                {
+                    printf("davli maybeEmitSystemVal sv_sampleposition\n");
+                    requireSPIRVCapability(SpvCapabilitySampleRateShading);
+                    return getBuiltinGlobalVar(inst->getFullType(), SpvBuiltInSamplePosition, inst);
                 }
                 else if (semanticName == "sv_stencilref")
                 {

@@ -62,6 +62,7 @@ void depointerizeInputParams(IRFunc* entryPoint);
     M(DeviceIndex, SV_DeviceIndex)                       \
     M(RenderTargetArrayIndex, SV_RenderTargetArrayIndex) \
     M(SampleIndex, SV_SampleIndex)                       \
+    M(SamplePosition, SV_SamplePosition)                 \
     M(StencilRef, SV_StencilRef)                         \
     M(TessFactor, SV_TessFactor)                         \
     M(VertexID, SV_VertexID)                             \

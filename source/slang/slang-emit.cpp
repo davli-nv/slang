@@ -1604,6 +1604,7 @@ Result linkAndOptimizeIR(
             dumpIRIfEnabled(codeGenContext, irModule, "PRE GLSL LEGALIZED");
 #endif
 
+            fprintf(stderr, "davli: linkAndOptimizeIR legalizeEntryPointsForGLSL\n");
             legalizeEntryPointsForGLSL(
                 session,
                 irModule,
@@ -2541,6 +2542,7 @@ static SlangResult createArtifactFromIR(
     StringBuilder runSpirvValEnvVar;
     PlatformUtil::getEnvironmentVariable(
         UnownedStringSlice("SLANG_RUN_SPIRV_VALIDATION"), runSpirvValEnvVar);
+
     if (opt&&compiler)
     {
 #if 0
@@ -2613,9 +2615,9 @@ static SlangResult createArtifactFromIR(
         {
             if (runSpirvValEnvVar.getUnownedSlice() == "1")
             {
-                if (SLANG_FAILED(compiler->validate(
+                bool failed = (SLANG_FAILED(compiler->validate(
                         (uint32_t*)spirv.getBuffer(),
-                        int(spirv.getCount() / 4))))
+                        int(spirv.getCount() / 4))));
                 {
                     compiler->disassemble((uint32_t*)spirv.getBuffer(), int(spirv.getCount() / 4));
                     codeGenContext->getSink()->diagnoseWithoutSourceView(
@@ -2623,6 +2625,11 @@ static SlangResult createArtifactFromIR(
                         Diagnostics::spirvValidationFailed);
                 }
             }
+        }
+
+        if (runSpirvDisasmEnvVar.getUnownedSlice() == "1")
+        {
+            compiler->disassemble((uint32_t*)spirv.getBuffer(), int(spirv.getCount() / 4));
         }
 
         if (runSpirvDisasmEnvVar.getUnownedSlice() == "1")

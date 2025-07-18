@@ -607,7 +607,8 @@ bool DiagnosticSink::diagnoseImpl(
     {
         // TODO: figure out a better policy for aborting compilation
         std::string message(formattedMessage.begin(), formattedMessage.end());
-        SLANG_ABORT_COMPILATION(message.c_str());
+        //SLANG_ABORT_COMPILATION(message.c_str());
+        fprintf(stderr, "%s:%d:%s\n", __FILE__, __LINE__, message.c_str());
     }
     return true;
 }
