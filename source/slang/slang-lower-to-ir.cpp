@@ -12975,16 +12975,28 @@ RefPtr<IRModule> generateIRForTranslationUnit(
             nvapiSlotModifier->spaceName.getUnownedSlice());
     }
 
-#if 0
-    if (compileRequest->optionSet.shouldDumpIR())
+#if 1
+    //if (compileRequest->optionSet.shouldDumpIR())
     {
-        DiagnosticSinkWriter writer(compileRequest->getSink());
+        extern String dumpFileNameBase;
+        extern String lastDumpedEntryPoint;
+        extern int dumpCount;
+        FILE* f = nullptr;
+        String dumpFileName = (dumpFileNameBase + String(dumpCount++) + ".GENERATED.txt");
+        fopen_s(&f, dumpFileName.getBuffer(), "wt");
+        FileWriter writer(f, 0);
+        lastDumpedEntryPoint = "";
+        //DiagnosticSinkWriter writer(compileRequest->getSink());
         dumpIR(
             module,
             compileRequest->m_irDumpOptions,
             "GENERATED",
             compileRequest->getSourceManager(),
             &writer);
+        fclose(f);
+        if (lastDumpedEntryPoint != "") {
+            std::rename(dumpFileName.getBuffer(), (dumpFileName + lastDumpedEntryPoint).getBuffer());
+        }
     }
 #endif
 
@@ -13227,16 +13239,27 @@ RefPtr<IRModule> generateIRForTranslationUnit(
 
     // If we are being asked to dump IR during compilation,
     // then we can dump the initial IR for the module here.
-    if (compileRequest->optionSet.shouldDumpIR())
+    // if (compileRequest->optionSet.shouldDumpIR())
     {
-        DiagnosticSinkWriter writer(compileRequest->getSink());
-
+        // DiagnosticSinkWriter writer(compileRequest->getSink());
+        extern String dumpFileNameBase;
+        extern String lastDumpedEntryPoint;
+        extern int dumpCount;
+        FILE* f = nullptr;
+        String dumpFileName = (dumpFileNameBase + String(dumpCount++) + ".LOWER-TO-IR.txt");
+        fopen_s(&f, dumpFileName.getBuffer(), "wt");
+        FileWriter writer(f, 0);
+        lastDumpedEntryPoint = "";
         dumpIR(
             module,
             compileRequest->m_irDumpOptions,
             "LOWER-TO-IR",
             compileRequest->getSourceManager(),
             &writer);
+        fclose(f);
+        if (lastDumpedEntryPoint != "") {
+            std::rename(dumpFileName.getBuffer(), (dumpFileName + lastDumpedEntryPoint).getBuffer());
+        }
     }
 
     module->buildMangledNameToGlobalInstMap();
