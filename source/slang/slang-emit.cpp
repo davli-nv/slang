@@ -136,6 +136,8 @@ Slang::String get_slang_torch_prelude();
 namespace Slang
 {
 
+void dumpIRIfEnabled(CodeGenContext* codeGenContext, IRModule* irModule, char const* label = nullptr);
+
 EntryPointLayout* findEntryPointLayout(ProgramLayout* programLayout, EntryPoint* entryPoint)
 {
     // TODO: This function shouldn't need to exist, and it
@@ -206,25 +208,32 @@ StructTypeLayout* getGlobalStructLayout(ProgramLayout* programLayout)
 {
     return getScopeStructLayout(programLayout);
 }
-
-static void dumpIRIfEnabled(
+String lastDumpedEntryPoint;
+void dumpIRIfEnabled(
     CodeGenContext* codeGenContext,
     IRModule* irModule,
-    char const* label = nullptr)
+    char const* label)
 {
-    if (codeGenContext->shouldDumpIR())
+    if (true||codeGenContext->shouldDumpIR())
     {
-        DiagnosticSinkWriter writer(codeGenContext->getSink());
-        // FILE* f = nullptr;
-        // fopen_s(&f, (String("dump-") + label + ".txt").getBuffer(), "wt");
-        // FileWriter writer(f, 0);
+        // DiagnosticSinkWriter writer(codeGenContext->getSink());
+        FILE* f = nullptr;
+        char targetFormatStr[32];
+        sprintf(targetFormatStr, "%d", codeGenContext->getTargetFormat());
+        String dumpFileName = (String("c:\\slang\\ir\\dump-") + label + "." + targetFormatStr + ".txt");
+        fopen_s(&f, dumpFileName.getBuffer(), "wt");
+        FileWriter writer(f, 0);
+        lastDumpedEntryPoint = "";
         dumpIR(
             irModule,
             codeGenContext->getIRDumpOptions(),
             label,
             codeGenContext->getSourceManager(),
             &writer);
-        // fclose(f);
+        fclose(f);
+        if (lastDumpedEntryPoint != "") {
+            std::rename(dumpFileName.getBuffer(), (dumpFileName + lastDumpedEntryPoint).getBuffer());
+        }
     }
 }
 
@@ -2196,7 +2205,7 @@ SlangResult CodeGenContext::emitEntryPointsSourceFromIR(ComPtr<IArtifact>& outAr
     // Write out the result
 
     auto artifact = ArtifactUtil::createArtifactForCompileTarget(asExternal(target));
-    artifact->addRepresentationUnknown(StringBlob::moveCreate(finalResult));
+    artifact->addRepresentationUnknown(StringBlob::create(finalResult));
 
     ArtifactUtil::addAssociated(artifact, metadata);
 
@@ -2213,6 +2222,16 @@ SlangResult CodeGenContext::emitEntryPointsSourceFromIR(ComPtr<IArtifact>& outAr
     }
 
     outArtifact.swap(artifact);
+    dumpIRIfEnabled(this, linkedIR.module, "EMIT ENTRY POINTS SOURCE");
+    extern String lastDumpedEntryPoint;
+    char targetFormatStr[32];
+    sprintf(targetFormatStr, "%d", this->getTargetFormat());
+    String dumpFileName = (String("c:\\slang\\ir\\dump-EMIT ENTRY POINTS SOURCE.") + targetFormatStr + lastDumpedEntryPoint + ".src.txt");
+    FILE* f = nullptr;
+    fopen_s(&f, dumpFileName.getBuffer(), "wt");
+    fwrite(finalResult.getBuffer(), finalResult.getLength(), 1,f);
+    fclose(f);
+
     return SLANG_OK;
 }
 
@@ -2502,10 +2521,27 @@ static SlangResult createArtifactFromIR(
 
     artifact->addRepresentationUnknown(ListBlob::moveCreate(spirv));
 
+    {
+        extern String lastDumpedEntryPoint;
+        char targetFormatStr[32];
+        sprintf(targetFormatStr, "%d", codeGenContext->getTargetFormat());
+        String dumpFileName = (String("c:\\slang\\ir\\dump-UNOPT SPIRV.") + targetFormatStr + lastDumpedEntryPoint + ".spv");
+        FILE* f = nullptr;
+        fopen_s(&f, dumpFileName.getBuffer(), "wb");
+        fwrite(spirv.getBuffer(), spirv.getCount(), 1, f);
+        fclose(f);
+    }
     IDownstreamCompiler* compiler = codeGenContext->getSession()->getOrLoadDownstreamCompiler(
         PassThroughMode::SpirvOpt,
         codeGenContext->getSink());
-    if (compiler)
+    static volatile bool opt = false;
+    StringBuilder runSpirvDisasmEnvVar;
+    PlatformUtil::getEnvironmentVariable(
+        UnownedStringSlice("SLANG_RUN_SPIRV_DISASM"), runSpirvDisasmEnvVar);
+    StringBuilder runSpirvValEnvVar;
+    PlatformUtil::getEnvironmentVariable(
+        UnownedStringSlice("SLANG_RUN_SPIRV_VALIDATION"), runSpirvValEnvVar);
+    if (opt&&compiler)
     {
 #if 0
         // Dump the unoptimized/unlinked SPIRV after lowering from slang IR -> SPIRV
@@ -2575,10 +2611,6 @@ static SlangResult createArtifactFromIR(
 
         if (!codeGenContext->shouldSkipSPIRVValidation())
         {
-            StringBuilder runSpirvValEnvVar;
-            PlatformUtil::getEnvironmentVariable(
-                UnownedStringSlice("SLANG_RUN_SPIRV_VALIDATION"),
-                runSpirvValEnvVar);
             if (runSpirvValEnvVar.getUnownedSlice() == "1")
             {
                 if (SLANG_FAILED(compiler->validate(
@@ -2591,6 +2623,11 @@ static SlangResult createArtifactFromIR(
                         Diagnostics::spirvValidationFailed);
                 }
             }
+        }
+
+        if (runSpirvDisasmEnvVar.getUnownedSlice() == "1")
+        {
+            compiler->disassemble((uint32_t*)spirv.getBuffer(), int(spirv.getCount() / 4));
         }
 
         ComPtr<IArtifact> optimizedArtifact;
@@ -2642,6 +2679,42 @@ static SlangResult createArtifactFromIR(
 
         SLANG_RETURN_ON_FAIL(
             passthroughDownstreamDiagnostics(codeGenContext->getSink(), compiler, artifact));
+
+        {
+            extern String lastDumpedEntryPoint;
+            char targetFormatStr[32];
+            sprintf(targetFormatStr, "%d", codeGenContext->getTargetFormat());
+            String dumpFileName = (String("c:\\slang\\ir\\dump-OPT SPIRV.") + targetFormatStr + lastDumpedEntryPoint + ".spv");
+            FILE* f = nullptr;
+            fopen_s(&f, dumpFileName.getBuffer(), "wb");
+            ISlangBlob* blob = nullptr;
+            artifact->loadBlob(ArtifactKeep::Yes, &blob);
+            fwrite(blob->getBufferPointer(), blob->getBufferSize(), 1, f);
+            fclose(f);
+            blob->release();
+        }
+    }
+    else if (compiler)
+    {
+        if (runSpirvDisasmEnvVar.getUnownedSlice() == "1")
+        {
+            compiler->disassemble((uint32_t*)spirv.getBuffer(), int(spirv.getCount() / 4));
+        }
+        if (runSpirvValEnvVar.getUnownedSlice() == "1")
+        {
+            bool failed = (SLANG_FAILED(compiler->validate(
+                    (uint32_t*)spirv.getBuffer(),
+                    int(spirv.getCount() / 4))));
+            {
+                compiler->disassemble((uint32_t*)spirv.getBuffer(), int(spirv.getCount() / 4));
+                if (failed)
+                {
+                    codeGenContext->getSink()->diagnoseWithoutSourceView(
+                        SourceLoc{},
+                        Diagnostics::spirvValidationFailed);
+                }
+            }
+        }
     }
 
     return SLANG_OK;

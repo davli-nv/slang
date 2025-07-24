@@ -7490,6 +7490,19 @@ static void dumpInstExpr(IRDumpContext* context, IRInst* inst)
 
     dump(context, opInfo.name);
     dumpInstOperandList(context, inst);
+
+    extern String lastDumpedEntryPoint;
+    if (op == kIROp_EntryPointDecoration)
+    {
+        lastDumpedEntryPoint = ".";
+        auto irConst1 = as<IRConstant>(inst->getOperand(1));
+        auto irConst2 = as<IRConstant>(inst->getOperand(2));
+        if (irConst1)
+            lastDumpedEntryPoint.append(String(irConst1->getStringSlice().begin(), irConst1->getStringSlice().end()) + ".");
+        if (irConst2)
+            lastDumpedEntryPoint.append(String(irConst2->getStringSlice().begin(), irConst2->getStringSlice().end()) + ".");
+        lastDumpedEntryPoint.append(".txt");
+    }
 }
 
 static void dumpInstBody(IRDumpContext* context, IRInst* inst)
