@@ -30,6 +30,8 @@
 namespace Slang
 {
 
+void dumpIRIfEnabled(CodeGenContext* codeGenContext, IRModule* irModule, char const* label = nullptr);
+
 //
 // Legalization of IR for direct SPIRV emit.
 //
@@ -2276,6 +2278,7 @@ struct SPIRVLegalizationContext : public SourceEmitterBase
             }
         }
 
+        dumpIRIfEnabled(m_codeGenContext, m_module, "BEFORE INLINE GLOBAL VALUES SPIRV");
         GlobalInstInliningContext().inlineGlobalValuesAndRemoveIfUnused(m_module);
 
         // Some legalization processing may change the function parameter types,
@@ -2323,6 +2326,8 @@ struct SPIRVLegalizationContext : public SourceEmitterBase
         if (m_codeGenContext->getRequiredLoweringPassSet().nonVectorCompositeSelect &&
             !m_sharedContext->isSpirv14OrLater())
             legalizeNonVectorCompositeSelect(m_module);
+
+        dumpIRIfEnabled(m_codeGenContext, m_module, "POST LEGALIZE SPIRV");
     }
 
     void updateFunctionTypes()
@@ -2548,6 +2553,7 @@ void legalizeIRForSPIRV(
     SLANG_UNUSED(entryPoints);
     legalizeSPIRV(context, module, codeGenContext);
     simplifyIRForSpirvLegalization(context->m_targetProgram, codeGenContext->getSink(), module);
+    dumpIRIfEnabled(codeGenContext, module, "POST SIMPLIFY IR SPIRV");
     buildEntryPointReferenceGraph(context->m_referencingEntryPoints, module);
     insertFragmentShaderInterlock(context, module);
 }
