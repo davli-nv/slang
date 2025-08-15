@@ -115,4 +115,196 @@ void legalizeNonStructParameterToStructForHLSL(IRModule* module)
     }
 }
 
+static bool isSamplePositionSemantic(const UnownedStringSlice& s)
+{
+    return s.caseInsensitiveEquals(UnownedStringSlice("SV_SamplePosition"));
+}
+
+static bool paramHasSamplePositionByDecor(IRInst* inst)
+{
+    if (auto sem = inst->findDecoration<IRSemanticDecoration>())
+        return isSamplePositionSemantic(sem->getSemanticName());
+    return false;
+}
+
+static bool layoutHasSamplePosition(IRVarLayout* vlay)
+{
+    if (!vlay)
+        return false;
+    if (auto sys = vlay->findSystemValueSemanticAttr())
+        return isSamplePositionSemantic(UnownedStringSlice(sys->getName()));
+    return false;
+}
+
+static bool fieldHasSamplePosition(IRStructField* field, IRVarLayout* fieldLayout)
+{
+    // By key decoration
+    if (auto sem = field->getKey()->findDecoration<IRSemanticDecoration>())
+        if (isSamplePositionSemantic(sem->getSemanticName()))
+            return true;
+    // By field var-layout
+    return layoutHasSamplePosition(fieldLayout);
+}
+
+static bool typeOrLayoutHasSamplePosition(IRStructType* st, IRStructTypeLayout* stLayout)
+{
+    Index i = 0;
+    for (auto field : st->getFields())
+    {
+        IRVarLayout* fldLayout = stLayout ? stLayout->getFieldLayout(i) : nullptr;
+        if (fieldHasSamplePosition(field, fldLayout))
+            return true;
+
+        // Recurse into nested structs
+        if (auto innerSt = as<IRStructType>(field->getFieldType()))
+        {
+            auto innerStLayout =
+                stLayout ? as<IRStructTypeLayout>(fldLayout ? fldLayout->getTypeLayout() : nullptr)
+                         : nullptr;
+            if (typeOrLayoutHasSamplePosition(innerSt, innerStLayout))
+                return true;
+        }
+        ++i;
+    }
+    return false;
+}
+
+static bool paramHasSamplePosition(IRParam* p)
+{
+    // 1) Direct semantic on param
+    if (paramHasSamplePositionByDecor(p))
+        return true;
+
+    // 2) System-value semantic on param var layout
+    IRVarLayout* vlay = nullptr;
+    if (auto layDec = p->findDecoration<IRLayoutDecoration>())
+        vlay = as<IRVarLayout>(layDec->getLayout());
+    if (layoutHasSamplePosition(vlay))
+        return true;
+
+    IRType* paramType = p->getDataType();
+    IRType* valueType = paramType;
+    IRPtrTypeBase* paramPtrType = as<IRPtrTypeBase>(paramType);
+    if (paramPtrType) // parameter is passed by const reference
+        valueType = paramPtrType->getValueType();
+    // 3) If struct, search fields (including nested)
+    if (auto st = as<IRStructType>(valueType))
+    {
+        auto stLayout = vlay ? as<IRStructTypeLayout>(vlay->getTypeLayout()) : nullptr;
+        if (typeOrLayoutHasSamplePosition(st, stLayout))
+            return true;
+    }
+    return false;
+}
+
+// Scan functions
+static void findParamsWithSamplePosition(IRModule* m, List<std::pair<IRFunc*, IRParam*>>& out)
+{
+    for (auto g : m->getGlobalInsts())
+    {
+        auto f = as<IRFunc>(g);
+        if (!f)
+            continue;
+        auto first = f->getFirstBlock();
+        if (!first)
+            continue;
+
+        for (auto p = first->getFirstParam(); p; p = p->getNextParam())
+        {
+            if (paramHasSamplePosition(p))
+                out.add({f, p});
+        }
+    }
+}
+
+// Legalize SV_SamplePosition to GetRenderTargetSamplePosition(SV_SampleIndex) for D3D/HLSL targets
+void legalizeSamplePosition(IRModule* module)
+{
+    List<std::pair<IRFunc*, IRParam*>> list;
+    findParamsWithSamplePosition(module, list);
+    for (auto globalInst : module->getGlobalInsts())
+    {
+        auto func = as<IRGlobalValueWithCode>(globalInst);
+        if (!func)
+            continue;
+        for (auto block : func->getBlocks())
+        {
+            for (auto inst : block->getChildren())
+            {
+                IRInst* load = as<IRLoad>(inst);
+                if (!load)
+                    continue;
+                for (UInt i = 0; i < load->getOperandCount(); i++)
+                {
+                    auto operand = load->getOperand(i);
+                    IRSemanticDecoration* semanticDecor =
+                        operand->findDecoration<IRSemanticDecoration>();
+                    if (!semanticDecor ||
+                        !semanticDecor->getSemanticName().caseInsensitiveEquals(
+                            UnownedStringSlice ("sv_sampleposition")))
+                        continue;
+
+                    // find GetRenderTargetSamplePosition in coreModules
+                    IRInst* samplePositionFunc = nullptr;
+                    for (auto coreModule : module->getSession()->coreModules)
+                    {
+                        for (auto globalInst : coreModule->getIRModule()->getGlobalInsts())
+                        {
+                            auto func = as<IRGlobalValueWithCode>(globalInst);
+                            if (!func)
+                                continue;
+                            IRNameHintDecoration* nameHintDecor =
+                                func->findDecoration<IRNameHintDecoration>();
+                            if (nameHintDecor && 
+                                nameHintDecor->getName() == UnownedStringSlice("GetRenderTargetSamplePosition"))
+                            {
+                                samplePositionFunc = func;
+                                break;
+                            }    
+                        }
+                        if (samplePositionFunc)
+                            break;
+                    }
+
+                    IRBuilder builder(load);
+                    builder.setInsertBefore(load);              
+                    
+                    IRType* type = builder.getVectorType(builder.getFloatType(), 2);
+                    IRInst* sampleIndexVar;
+                    //IRInst* sampleIndex = builder.emitLoad(sampleIndexVar);
+                    IRInst* sampleIndex = builder.getIntValue(builder.getUIntType(), 3);
+                    IRCall* call = builder.emitCallInst(type, samplePositionFunc, 1, &sampleIndex);
+
+                    load->replaceUsesWith(call);
+
+                    //semanticDecor->removeAndDeallocate();
+                    // 
+                    //builder.setInsertBefore(semanticDecor);
+                    //semanticDecor->setOperand(0, builder.getStringValue(UnownedStringSlice("IGNORE_SEMANTIC")));
+                }
+            }
+        }
+
+        bool needFuncTypeFixup = false;
+        for (auto pp = func->getFirstBlock()->getFirstParam(); pp;)
+        {
+            auto next = pp->getNextParam();
+            IRSemanticDecoration* semanticDecor = pp->findDecoration<IRSemanticDecoration>();
+            if (!semanticDecor || 
+                !semanticDecor->getSemanticName().caseInsensitiveEquals(UnownedStringSlice("sv_sampleposition")))
+            {
+                pp = next;
+                continue;
+            }
+            pp->removeAndDeallocate();
+            needFuncTypeFixup = true;
+            pp = next;
+        }
+        if (needFuncTypeFixup)
+            fixUpFuncType(as<IRFunc>(func));
+    }
+
+    
+}
+
 } // namespace Slang

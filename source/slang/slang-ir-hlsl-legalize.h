@@ -13,5 +13,6 @@ struct IRFunc;
 struct IRModule;
 
 void legalizeNonStructParameterToStructForHLSL(IRModule* module);
+void legalizeSamplePosition(IRModule* module);
 
 } // namespace Slang

@@ -1663,6 +1663,13 @@ Result linkAndOptimizeIR(
     if (isD3DTarget(targetRequest))
         legalizeNonStructParameterToStructForHLSL(irModule);
 
+    if (isD3DTarget(targetRequest))
+    {
+        dumpIRIfEnabled(codeGenContext, irModule, "BEFORE-LEGALIZE-SAMPLE-POSITION");
+        legalizeSamplePosition(irModule);
+        dumpIRIfEnabled(codeGenContext, irModule, "POST-LEGALIZE-SAMPLE-POSITION");
+    }
+
     // Create aliases for all dynamic resource parameters.
     if (requiredLoweringPassSet.dynamicResource && isKhronosTarget(targetRequest))
         legalizeDynamicResourcesForGLSL(codeGenContext, irModule);
