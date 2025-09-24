@@ -6,7 +6,7 @@
 //TEST(compute, vulkan):COMPARE_COMPUTE_EX:-vk -compute -shaderobj
 //TEST_INPUT:ubuffer(data=[0 1 2 3 4 0x100 0x999], stride=4):out,name outputBuffer
 
-//TEST:SIMPLE(filecheck=GLSL): -target glsl
+//TEST:SIMPLE(filecheck=GLSLu): -target glsl
 //GLSL: buffer OutBufTy
 //GLSL: outputBuffer_0.ua_0.length()
 
@@ -23,6 +23,8 @@ GLSLShaderStorageBuffer<OutBufTy> outputBuffer;
 [numthreads(4, 1, 1)]
 void computeMain(uint3 dispatchThreadID : SV_DispatchThreadID)
 {
-    outputBuffer.pad = outputBuffer.ua.getCount();
+    // outputBuffer.pad = outputBuffer.ua.getCount();
+    //outputBuffer.pad = outputBuffer.getTrailingElementCount();
+    outputBuffer.pad = getTrailingElementCount(outputBuffer);
     outputBuffer.ua[dispatchThreadID.x] = dispatchThreadID.x + outputBuffer.ua[4];
 }

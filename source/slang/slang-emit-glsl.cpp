@@ -2231,6 +2231,71 @@ bool GLSLSourceEmitter::tryEmitInstExprImpl(IRInst* inst, const EmitOpInfo& inOu
             maybeCloseParens(needClose);
             return true;
         }
+    case kIROp_GetTrailingElementCount:
+        {
+            // For GLSL, we need to emit the trailing element count logic
+            // This is more complex than SPIR-V since we need to emit the logic inline
+            auto ssboOperand = inst->getOperand(0);
+            auto ssboType = as<IRGLSLShaderStorageBufferType>(ssboOperand->getDataType());
+            if (!ssboType)
+            {
+                m_writer->emit("0");
+                return true;
+            }
+            
+            auto elementType = ssboType->getElementType();
+            auto structType = as<IRStructType>(elementType);
+            if (!structType)
+            {
+                m_writer->emit("0");
+                return true;
+            }
+            
+            // Find the last field
+            IRStructField* lastField = nullptr;
+            for (auto field : structType->getFields())
+            {
+                lastField = field;
+            }
+            
+            if (!lastField)
+            {
+                m_writer->emit("0");
+                return true;
+            }
+            
+            auto lastFieldType = lastField->getFieldType();
+            
+            // Check if it's a fixed-size array
+            if (auto arrayType = as<IRArrayType>(lastFieldType))
+            {
+                auto elementCount = arrayType->getElementCount();
+                if (auto intLit = as<IRIntLit>(elementCount))
+                {
+                    m_writer->emit(intLit->getValue());
+                    return true;
+                }
+            }
+            
+            // Check if it's an unsized array (runtime array)
+            if (auto unsizedArrayType = as<IRUnsizedArrayType>(lastFieldType))
+            {
+                // Emit .length() call on the last field
+                auto prec = getInfo(EmitOp::Postfix);
+                EmitOpInfo outerPrec = inOuterPrec;
+                bool needClose = maybeEmitParens(outerPrec, prec);
+                emitOperand(ssboOperand, prec);
+                m_writer->emit(".");
+                m_writer->emit(getName(lastField->getKey()));
+                m_writer->emit(".length()");
+                maybeCloseParens(needClose);
+                return true;
+            }
+            
+            // Return 0 if the last field is not an array
+            m_writer->emit("0");
+            return true;
+        }
     case kIROp_MakeVectorFromScalar:
     case kIROp_MatrixReshape:
         {

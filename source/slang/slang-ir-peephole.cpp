@@ -306,6 +306,77 @@ struct PeepholeContext : InstPassBase
                 changed = true;
             }
             break;
+        case kIROp_GetTrailingElementCount:
+            {
+                // Peephole optimization for GetTrailingElementCount
+                auto ssboOperand = inst->getOperand(0);
+                auto ssboType = as<IRGLSLShaderStorageBufferType>(ssboOperand->getDataType());
+                if (!ssboType)
+                {
+                    // Replace with 0 if not a GLSLShaderStorageBuffer
+                    IRBuilder builder(inst);
+                    auto zero = builder.getIntValue(builder.getIntType(), 0);
+                    inst->replaceUsesWith(zero);
+                    maybeRemoveOldInst(inst);
+                    changed = true;
+                    break;
+                }
+                
+                auto elementType = ssboType->getElementType();
+                auto structType = as<IRStructType>(elementType);
+                if (!structType)
+                {
+                    // Replace with 0 if element type is not a struct
+                    IRBuilder builder(inst);
+                    auto zero = builder.getIntValue(builder.getIntType(), 0);
+                    inst->replaceUsesWith(zero);
+                    maybeRemoveOldInst(inst);
+                    changed = true;
+                    break;
+                }
+                
+                // Find the last field
+                IRStructField* lastField = nullptr;
+                for (auto field : structType->getFields())
+                {
+                    lastField = field;
+                }
+                
+                if (!lastField)
+                {
+                    // Replace with 0 if struct has no fields
+                    IRBuilder builder(inst);
+                    auto zero = builder.getIntValue(builder.getIntType(), 0);
+                    inst->replaceUsesWith(zero);
+                    maybeRemoveOldInst(inst);
+                    changed = true;
+                    break;
+                }
+                
+                auto lastFieldType = lastField->getFieldType();
+                
+                // Check if it's a fixed-size array
+                if (auto arrayType = as<IRArrayType>(lastFieldType))
+                {
+                    // Replace with the fixed array size
+                    inst->replaceUsesWith(arrayType->getElementCount());
+                    maybeRemoveOldInst(inst);
+                    changed = true;
+                    break;
+                }
+                
+                // For unsized arrays, we can't optimize at compile time
+                // For non-arrays, replace with 0
+                if (!as<IRUnsizedArrayType>(lastFieldType))
+                {
+                    IRBuilder builder(inst);
+                    auto zero = builder.getIntValue(builder.getIntType(), 0);
+                    inst->replaceUsesWith(zero);
+                    maybeRemoveOldInst(inst);
+                    changed = true;
+                }
+            }
+            break;
         case kIROp_GetResultError:
             if (inst->getOperand(0)->getOp() == kIROp_MakeResultError)
             {

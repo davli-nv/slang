@@ -21,6 +21,12 @@ void checkUnsupportedInst(TargetRequest* target, IRFunc* func, DiagnosticSink* s
                     sink->diagnose(inst, Diagnostics::attemptToQuerySizeOfUnsizedArray);
                 }
                 break;
+            case kIROp_GetTrailingElementCount:
+                if (!isKhronosTarget(target->getTarget()))
+                {
+                    sink->diagnose(inst, Diagnostics::attemptToQuerySizeOfUnsizedArray);
+                }
+                break;
             }
         }
     }

@@ -4053,6 +4053,9 @@ struct SPIRVEmitContext : public SourceEmitterBase, public SPIRVEmitSharedContex
         case kIROp_GetArrayLength:
             result = emitGetArrayLength(parent, inst);
             break;
+        case kIROp_GetTrailingElementCount:
+            result = emitGetTrailingElementCount(parent, inst);
+            break;
         case kIROp_GetElement:
             result = emitGetElement(parent, as<IRGetElement>(inst));
             break;
@@ -7075,6 +7078,98 @@ struct SPIRVEmitContext : public SourceEmitterBase, public SPIRVEmitSharedContex
             return arrayLength;
         }
         return emitOpBitcast(parent, inst, wantTy, arrayLength);
+    }
+
+    SpvInst* emitGetTrailingElementCount(SpvInstParent* parent, IRInst* inst)
+    {
+        IRBuilder builder(m_irModule);
+        builder.setInsertBefore(inst);
+        
+        // Get the GLSLShaderStorageBuffer operand
+        auto ssboOperand = inst->getOperand(0);
+        auto ssboType = as<IRGLSLShaderStorageBufferType>(ssboOperand->getDataType());
+        if (!ssboType)
+        {
+            // Return 0 if not a GLSLShaderStorageBuffer
+            auto zero = builder.getIntValue(builder.getIntType(), 0);
+            registerInst(inst, (ensureInst(zero)));
+            return ensureInst(zero);
+        }
+        
+        // Get the element type T from GLSLShaderStorageBuffer<T>
+        auto elementType = ssboType->getElementType();
+        auto structType = as<IRStructType>(elementType);
+        if (!structType)
+        {
+            // Return 0 if element type is not a struct
+            auto zero = builder.getIntValue(builder.getIntType(), 0);
+            registerInst(inst, (ensureInst(zero)));
+            return ensureInst(zero);
+        }
+        
+        // Check if the last field is an array
+        IRStructField* lastField = nullptr;
+        for (auto field : structType->getFields())
+        {
+            lastField = field;
+        }
+        
+        if (!lastField)
+        {
+            // Return 0 if struct has no fields
+            auto zero = builder.getIntValue(builder.getIntType(), 0);
+            registerInst(inst, (ensureInst(zero)));
+            return ensureInst(zero);
+        }
+        
+        auto lastFieldType = lastField->getFieldType();
+        
+        // Check if it's a fixed-size array
+        if (auto arrayType = as<IRArrayType>(lastFieldType))
+        {
+            // Return the fixed array size
+            auto elementCount = arrayType->getElementCount();
+            if (auto intLit = as<IRIntLit>(elementCount))
+            {
+                auto count = builder.getIntValue(builder.getIntType(), intLit->getValue());
+                registerInst(inst, (ensureInst(count)));
+                return ensureInst(count);
+            }
+        }
+        
+        // Check if it's an unsized array (runtime array)
+        if (auto unsizedArrayType = as<IRUnsizedArrayType>(lastFieldType))
+        {
+            // Create a field address to the last field and emit GetArrayLength
+            auto fieldAddr = builder.emitFieldAddress(
+                builder.getPtrType(lastFieldType),
+                ssboOperand,
+                lastField->getKey()
+            );
+            
+            auto arrayLength = emitInst(
+                parent,
+                nullptr,
+                SpvOpArrayLength,
+                builder.getUIntType(),
+                kResultID,
+                ssboOperand,
+                SpvLiteralInteger::from32((int32_t)getStructFieldId(structType, lastField->getKey())));
+            
+            // Convert to the IR result type if needed
+            auto wantTy = inst->getDataType();
+            if (wantTy == builder.getUIntType())
+            {
+                registerInst(inst, arrayLength);
+                return arrayLength;
+            }
+            return emitOpBitcast(parent, inst, wantTy, arrayLength);
+        }
+        
+        // Return 0 if the last field is not an array
+        auto zero = builder.getIntValue(builder.getIntType(), 0);
+        registerInst(inst, (ensureInst(zero)));
+        return ensureInst(zero);
     }
 
     SpvInst* emitGetElement(SpvInstParent* parent, IRGetElement* inst)
