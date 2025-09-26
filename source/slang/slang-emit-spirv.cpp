@@ -4053,11 +4053,11 @@ struct SPIRVEmitContext : public SourceEmitterBase, public SPIRVEmitSharedContex
         case kIROp_GetArrayLength:
             result = emitGetArrayLength(parent, inst);
             break;
-        case kIROp_GetTrailingElementCount:
-            result = emitGetTrailingElementCount(parent, inst);
-            break;
         case kIROp_GetElement:
             result = emitGetElement(parent, as<IRGetElement>(inst));
+            break;
+        case kIROp_GetTrailingElementCount:
+            result = emitGetTrailingElementCount(parent, inst);
             break;
         case kIROp_MakeStruct:
             result = emitCompositeConstruct(parent, inst);
@@ -7084,47 +7084,58 @@ struct SPIRVEmitContext : public SourceEmitterBase, public SPIRVEmitSharedContex
     {
         IRBuilder builder(m_irModule);
         builder.setInsertBefore(inst);
-        
-        // Get the GLSLShaderStorageBuffer operand
-        auto ssboOperand = inst->getOperand(0);
-        auto ssboType = as<IRGLSLShaderStorageBufferType>(ssboOperand->getDataType());
-        if (!ssboType)
+
+        // Get the operand - could be GLSLShaderStorageBuffer<T> or Ptr<T>
+        auto operand = inst->getOperand(0);
+        auto operandType = operand->getDataType();
+
+        IRType* elementType = nullptr;
+        IRInst* basePtr = operand;
+
+        if (auto ssboType = as<IRGLSLShaderStorageBufferType>(operandType))
         {
-            // Return 0 if not a GLSLShaderStorageBuffer
+            elementType = ssboType->getElementType();
+        }
+        else if (auto ptrType = as<IRPtrTypeBase>(operandType))
+        { // Ptr<T> (lowered from GLSLShaderStorageBuffer)
+            elementType = ptrType->getValueType();
+        }
+        else
+        {
+            // Return 0 if not a recognized buffer type
             auto zero = builder.getIntValue(builder.getIntType(), 0);
-            registerInst(inst, (ensureInst(zero)));
+            registerInst(inst, ensureInst(zero));
             return ensureInst(zero);
         }
-        
-        // Get the element type T from GLSLShaderStorageBuffer<T>
-        auto elementType = ssboType->getElementType();
+
+        // Check if element type is a struct
         auto structType = as<IRStructType>(elementType);
         if (!structType)
         {
             // Return 0 if element type is not a struct
             auto zero = builder.getIntValue(builder.getIntType(), 0);
-            registerInst(inst, (ensureInst(zero)));
+            registerInst(inst, ensureInst(zero));
             return ensureInst(zero);
         }
-        
-        // Check if the last field is an array
+
+        // Find the last field in the struct
         IRStructField* lastField = nullptr;
         for (auto field : structType->getFields())
         {
             lastField = field;
         }
-        
+
         if (!lastField)
         {
             // Return 0 if struct has no fields
             auto zero = builder.getIntValue(builder.getIntType(), 0);
-            registerInst(inst, (ensureInst(zero)));
+            registerInst(inst, ensureInst(zero));
             return ensureInst(zero);
         }
-        
+
         auto lastFieldType = lastField->getFieldType();
-        
-        // Check if it's a fixed-size array
+
+        // Case 1: Fixed-size array
         if (auto arrayType = as<IRArrayType>(lastFieldType))
         {
             // Return the fixed array size
@@ -7132,30 +7143,33 @@ struct SPIRVEmitContext : public SourceEmitterBase, public SPIRVEmitSharedContex
             if (auto intLit = as<IRIntLit>(elementCount))
             {
                 auto count = builder.getIntValue(builder.getIntType(), intLit->getValue());
-                registerInst(inst, (ensureInst(count)));
+                registerInst(inst, ensureInst(count));
                 return ensureInst(count);
             }
+            else
+            {
+                // Non-constant array size, convert to result type
+                auto wantTy = inst->getDataType();
+                auto convertedCount = emitOpBitcast(parent, inst, wantTy, ensureInst(elementCount));
+                return convertedCount;
+            }
         }
-        
-        // Check if it's an unsized array (runtime array)
+
+        // Case 2: Unsized array (runtime array)
         if (auto unsizedArrayType = as<IRUnsizedArrayType>(lastFieldType))
         {
-            // Create a field address to the last field and emit GetArrayLength
-            auto fieldAddr = builder.emitFieldAddress(
-                builder.getPtrType(lastFieldType),
-                ssboOperand,
-                lastField->getKey()
-            );
-            
+            // Use SPIR-V OpArrayLength to get the runtime array length
+            auto memberIndex = (int32_t)getStructFieldId(structType, lastField->getKey());
+
             auto arrayLength = emitInst(
                 parent,
                 nullptr,
                 SpvOpArrayLength,
                 builder.getUIntType(),
                 kResultID,
-                ssboOperand,
-                SpvLiteralInteger::from32((int32_t)getStructFieldId(structType, lastField->getKey())));
-            
+                basePtr,
+                SpvLiteralInteger::from32(memberIndex));
+
             // Convert to the IR result type if needed
             auto wantTy = inst->getDataType();
             if (wantTy == builder.getUIntType())
@@ -7165,10 +7179,10 @@ struct SPIRVEmitContext : public SourceEmitterBase, public SPIRVEmitSharedContex
             }
             return emitOpBitcast(parent, inst, wantTy, arrayLength);
         }
-        
+
         // Return 0 if the last field is not an array
         auto zero = builder.getIntValue(builder.getIntType(), 0);
-        registerInst(inst, (ensureInst(zero)));
+        registerInst(inst, ensureInst(zero));
         return ensureInst(zero);
     }
 

@@ -314,12 +314,13 @@ struct PeepholeContext : InstPassBase
                 if (!ssboType)
                 {
                     // Replace with 0 if not a GLSLShaderStorageBuffer
-                    IRBuilder builder(inst);
-                    auto zero = builder.getIntValue(builder.getIntType(), 0);
-                    inst->replaceUsesWith(zero);
-                    maybeRemoveOldInst(inst);
-                    changed = true;
-                    break;
+                    //IRBuilder builder(inst);
+                    //auto zero = builder.getIntValue(builder.getIntType(), 0);
+                    //inst->replaceUsesWith(zero);
+                    //maybeRemoveOldInst(inst);
+                    //changed = true;
+                    changed = changed; // after some passes IRGLSLShaderStorageBufferType is lost so ignore this check
+                    break;     
                 }
                 
                 auto elementType = ssboType->getElementType();

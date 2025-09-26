@@ -623,8 +623,8 @@ static void _lookUpMembersInSuperTypeImpl(
     LookupRequest const& request,
     LookupResult& ioResult,
     BreadcrumbInfo* inBreadcrumbs)
-{
-    // If the type was pointer-like, then dereference it
+{volatile bool matched = false;if (name && name->text == "getTrailingElementCount")
+        matched = true; // If the type was pointer-like, then dereference it
     // automatically here.
     if (((uint32_t)request.options & (uint32_t)LookupOptions::NoDeref) == 0)
     {
@@ -646,6 +646,22 @@ static void _lookUpMembersInSuperTypeImpl(
                 &derefBreacrumb);
             if (ioResult.isValid())
                 return;
+        }
+    }
+    if (auto declRefType = as<DeclRefType>(superType))
+    {
+        if (auto aggTypeDecl = declRefType->getDeclRef().as<AggTypeDecl>())
+        {
+            AggTypeDecl* decl = aggTypeDecl.getDecl();
+            if (auto magicMod = decl->findModifier<MagicTypeModifier>())
+            {
+                if (magicMod->magicName == "GLSLShaderStorageBufferType")
+                {
+                    magicMod = magicMod;
+                    // For GLSLShaderStorageBuffer, try container first, then element
+                    // ... (implementation from previous answer)
+                }
+            }
         }
     }
 

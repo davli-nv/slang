@@ -2929,7 +2929,7 @@ public:
 
     // Check a member expr as a general member lookup.
     // This is the default/fallback behavior if the base type isn't swizzlable.
-    Expr* checkGeneralMemberLookupExpr(MemberExpr* expr, Type* baseType);
+    Expr* checkGeneralMemberLookupExpr(MemberExpr* expr, Type* baseType, Expr* preDerefBase = nullptr);
 
     /// Perform semantic checking of an assignment where the operands have already been checked.
     Expr* checkAssignWithCheckedOperands(AssignExpr* expr);

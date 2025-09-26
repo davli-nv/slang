@@ -2567,6 +2567,7 @@ void legalizeIRForSPIRV(
 {
     SLANG_UNUSED(entryPoints);
     legalizeSPIRV(context, module, codeGenContext);
+    dumpIRIfEnabled(codeGenContext, module, "BEFORE SIMPLIFY IR SPIRV");
     simplifyIRForSpirvLegalization(context->m_targetProgram, codeGenContext->getSink(), module);
     dumpIRIfEnabled(codeGenContext, module, "POST SIMPLIFY IR SPIRV");
     buildEntryPointReferenceGraph(context->m_referencingEntryPoints, module);

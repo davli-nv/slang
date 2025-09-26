@@ -5545,7 +5545,7 @@ Expr* SemanticsVisitor::checkBaseForMemberExpr(
     return resultBaseExpr;
 }
 
-Expr* SemanticsVisitor::checkGeneralMemberLookupExpr(MemberExpr* expr, Type* baseType)
+Expr* SemanticsVisitor::checkGeneralMemberLookupExpr(MemberExpr* expr, Type* baseType, Expr* preDerefBase)
 {
     LookupResult lookupResult =
         lookUpMember(m_astBuilder, this, expr->name, baseType, m_outerScope);
@@ -5555,6 +5555,8 @@ Expr* SemanticsVisitor::checkGeneralMemberLookupExpr(MemberExpr* expr, Type* bas
         filterLookupResultByCheckedOptionalAndDiagnose(lookupResult, expr->loc, diagnosed);
     if (!lookupResult.isValid())
     {
+        if (preDerefBase && baseType != preDerefBase->type)
+            diagnosed = true; // lookup in pre-derefer base later, so suppress diagnostic here
         return lookupMemberResultFailure(expr, baseType, diagnosed);
     }
     if (expr->name == getSession()->getCompletionRequestTokenName())
@@ -5610,8 +5612,9 @@ Expr* SemanticsVisitor::checkGeneralMemberLookupExpr(MemberExpr* expr, Type* bas
 Expr* SemanticsExprVisitor::visitMemberExpr(MemberExpr* expr)
 {
     bool needDeref = false;
+    Expr* checkedPreDerefBaseExpr = CheckTerm(expr->baseExpression);
     expr->baseExpression =
-        checkBaseForMemberExpr(expr->baseExpression, CheckBaseContext::Member, needDeref);
+        checkBaseForMemberExpr(checkedPreDerefBaseExpr, CheckBaseContext::Member, needDeref);
 
     if (!needDeref && as<DerefMemberExpr>(expr) && !as<PtrType>(expr->baseExpression->type))
     {
@@ -5686,7 +5689,17 @@ Expr* SemanticsExprVisitor::visitMemberExpr(MemberExpr* expr)
     }
     else
     {
-        return checkGeneralMemberLookupExpr(expr, baseType);
+        auto result = checkGeneralMemberLookupExpr(expr, baseType, checkedPreDerefBaseExpr);
+        if (IsErrorExpr(result) && needDeref)
+        {
+            auto preDerefResult = checkGeneralMemberLookupExpr(
+                expr,
+                checkedPreDerefBaseExpr->type,
+                checkedPreDerefBaseExpr);
+            if (!IsErrorExpr(preDerefResult))
+                return preDerefResult;
+        }
+        return result;
     }
 }
 
