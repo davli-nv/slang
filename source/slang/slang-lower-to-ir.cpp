@@ -7349,9 +7349,6 @@ struct StmtLoweringVisitor : StmtVisitor<StmtLoweringVisitor>
                             // Variables declared in the function body will use this as their parent
                             context->debugLexicalScopeStack.add(debugFunc);
                             debugLexicalBlock = debugFunc; // Track that we added something to pop later
-
-                            // Emit a DebugScope instruction to set the function scope
-                            builder->emitDebugScope(debugFunc, nullptr);
                         }
                     }
                 }
