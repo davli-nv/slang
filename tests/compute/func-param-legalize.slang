@@ -1,7 +1,5 @@
 //TEST(compute):COMPARE_COMPUTE: -shaderobj
 //TEST(compute):COMPARE_COMPUTE: -shaderobj -cuda
-// Not supported in LLVM: textures are not currently available
-//DISABLE_TEST(compute):COMPARE_COMPUTE:-llvm -shaderobj
 
 struct Param
 {

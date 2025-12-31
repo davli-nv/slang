@@ -2,7 +2,6 @@
 
 //TEST(smoke,render):COMPARE_HLSL_RENDER:
 //DISABLE_TEST(smoke,render):COMPARE_HLSL_RENDER: -mtl
-//DISABLE_TEST(smoke,render):COMPARE_HLSL_RENDER: -llvm
 
 cbuffer Uniforms
 {

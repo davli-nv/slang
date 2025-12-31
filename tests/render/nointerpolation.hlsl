@@ -1,7 +1,6 @@
 //TEST(smoke):COMPARE_HLSL_RENDER:
 // TODO: Investigate Metal failure
 //DISABLE_TEST(smoke):COMPARE_HLSL_RENDER: -mtl
-//DISABLE_TEST(smoke):COMPARE_HLSL_RENDER: -llvm
 
 // Confirm that the `nointerpolation` modifier
 // makes it through Slang codegen with the

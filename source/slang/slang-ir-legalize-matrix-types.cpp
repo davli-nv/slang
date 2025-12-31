@@ -40,15 +40,8 @@ struct MatrixTypeLoweringContext
         workListSet.add(inst);
     }
 
-    bool shouldLowerMatrixType(IRMatrixType* matrixType)
+    bool shouldLowerTarget()
     {
-        if (isCPUTargetViaLLVM(targetProgram->getTargetReq()))
-        {
-            // Always lower all matrices on LLVM; we'd need to break them up
-            // like this for data layout reasons anyway.
-            return true;
-        }
-
         auto target = targetProgram->getTargetReq()->getTarget();
         switch (target)
         {
@@ -61,14 +54,20 @@ struct MatrixTypeLoweringContext
         case CodeGenTarget::Metal:
         case CodeGenTarget::MetalLib:
         case CodeGenTarget::MetalLibAssembly:
-            {
-                auto elementType = matrixType->getElementType();
-                return as<IRBoolType>(elementType) || as<IRUIntType>(elementType) ||
-                       as<IRIntType>(elementType);
-            }
+            return true;
         default:
             return false;
         }
+    }
+
+    bool shouldLowerMatrixType(IRMatrixType* matrixType)
+    {
+        if (!shouldLowerTarget())
+            return false;
+
+        auto elementType = matrixType->getElementType();
+        return as<IRBoolType>(elementType) || as<IRUIntType>(elementType) ||
+               as<IRIntType>(elementType);
     }
 
     IRInst* legalizeMatrixTypeDeclaration(IRInst* inst)

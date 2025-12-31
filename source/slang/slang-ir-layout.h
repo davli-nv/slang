@@ -87,7 +87,6 @@ public:
     static IRTypeLayoutRules* getNatural();
     static IRTypeLayoutRules* getC();
     static IRTypeLayoutRules* getConstantBuffer();
-    static IRTypeLayoutRules* getLLVM();
     static IRTypeLayoutRules* get(IRTypeLayoutRuleName name);
 };
 

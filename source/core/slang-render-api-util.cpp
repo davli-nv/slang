@@ -18,7 +18,6 @@ namespace Slang
     {RenderApiType::CPU, "cpu", ""},
     {RenderApiType::CUDA, "cuda", "cuda,ptx"},
     {RenderApiType::WebGPU, "wgpu,webgpu", "wgsl"},
-    {RenderApiType::LLVM, "llvm", "llvm"},
 };
 
 static int _calcAvailableApis()
@@ -255,6 +254,7 @@ static Token nextToken(Slang::UnownedStringSlice& textInOut, Slang::UnownedStrin
     return RenderApiType::Unknown;
 }
 
+#if SLANG_ENABLE_DIRECTX
 static bool _canLoadSharedLibrary(const char* libName)
 {
     SharedLibrary::Handle handle;
@@ -266,6 +266,7 @@ static bool _canLoadSharedLibrary(const char* libName)
     SharedLibrary::unload(handle);
     return true;
 }
+#endif
 
 /* static */ bool RenderApiUtil::calcHasApi(RenderApiType type)
 {
@@ -299,8 +300,6 @@ static bool _canLoadSharedLibrary(const char* libName)
     // We'll assume CUDA is available, and if not, trying to create it will detect it
     case RenderApiType::CUDA:
         return true;
-    case RenderApiType::LLVM:
-        return _canLoadSharedLibrary("slang-llvm");
     default:
         break;
     }

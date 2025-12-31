@@ -2477,7 +2477,7 @@ bool isInstAvailableAtBlock(IRDominatorTree& dom, IRInst* inst, IRBlock* block)
 
 bool doesTargetSupportUnrestrictedPointers(TargetRequest* req)
 {
-    return isCPUTarget(req) || isCUDATarget(req) || isCPUTargetViaLLVM(req);
+    return isCPUTarget(req) || isCUDATarget(req)/* || isCPUTargetViaLLVM(req)*/;
 }
 
 bool canInstBeStored(IRInst* inst)

@@ -1,5 +1,4 @@
 //TEST:COMPARE_COMPUTE(filecheck-buffer=CHECK):-cpu -output-using-type
-//TEST:COMPARE_COMPUTE(filecheck-buffer=CHECK):-llvm -output-using-type
 
 //TEST_INPUT: set outputBuffer = out ubuffer(data=[0 0 0 0], stride=4)
 RWStructuredBuffer<float> outputBuffer;

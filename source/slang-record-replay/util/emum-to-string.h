@@ -240,12 +240,6 @@ static Slang::String CompilerOptionNameToString(const slang::CompilerOptionName 
         CASE(ValidateIRDetailed);
         CASE(DumpIRBefore);
         CASE(DumpIRAfter);
-        CASE(EmitCPUMethod);
-        CASE(EmitCPUViaCPP);
-        CASE(EmitCPUViaLLVM);
-        CASE(LLVMTargetTriple);
-        CASE(LLVMCPU);
-        CASE(LLVMFeatures);
         CASE(CountOf);
     default:
         Slang::StringBuilder str;

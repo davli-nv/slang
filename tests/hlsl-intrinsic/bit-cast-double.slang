@@ -4,7 +4,6 @@
 //TEST(compute, vulkan):COMPARE_COMPUTE_EX(filecheck-buffer=CHK):-slang -vk -compute -shaderobj -render-feature double
 //TEST(compute):COMPARE_COMPUTE_EX(filecheck-buffer=CHK):-slang -cuda -compute -shaderobj
 //DISABLE_TEST(compute):COMPARE_COMPUTE(filecheck-buffer=CHK):-slang -shaderobj -mtl
-//TEST(compute):COMPARE_COMPUTE_EX(filecheck-buffer=CHK):-slang -compute -llvm -shaderobj
 
 //CHK: 1
 

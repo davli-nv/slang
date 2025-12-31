@@ -526,7 +526,6 @@ enum class IRTypeLayoutRuleName
     D3DConstantBuffer,
     MetalParameterBlock,
     C,
-    LLVM,
     _Count,
 };
 
@@ -1457,7 +1456,7 @@ FIDDLE()
 struct IRHLSLStructuredBufferTypeBase : IRBuiltinGenericType
 {
     FIDDLE(baseInst())
-    IRType* getDataLayout() { return getOperandCount() > 1 ? (IRType*)getOperand(1) : nullptr; }
+    IRType* getDataLayout() { return (IRType*)getOperand(1); }
 };
 
 

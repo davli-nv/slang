@@ -163,18 +163,7 @@ CapabilitySet TargetRequest::getTargetCaps()
     case CodeGenTarget::HostSharedLibrary:
     case CodeGenTarget::HostHostCallable:
     case CodeGenTarget::ShaderHostCallable:
-    case CodeGenTarget::HostObjectCode:
-    case CodeGenTarget::ShaderObjectCode:
-    case CodeGenTarget::HostLLVMIR:
-    case CodeGenTarget::ShaderLLVMIR:
-        if (isCPUTargetViaLLVM(this))
-        {
-            atoms.add(CapabilityName::llvm);
-        }
-        else
-        {
-            atoms.add(CapabilityName::cpp);
-        }
+        atoms.add(CapabilityName::cpp);
         break;
 
     case CodeGenTarget::CUDASource:
